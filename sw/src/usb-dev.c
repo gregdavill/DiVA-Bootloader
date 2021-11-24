@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <usb.h>
 #include <dfu.h>
+#include "time.h"
 #include <system.h>
 
 #include <usb-desc.h>
@@ -11,6 +12,8 @@ static uint8_t reply_buffer[8];
 static uint8_t usb_configuration = 0;
 #define USB_MAX_PACKET_SIZE 64
 static uint32_t rx_buffer[USB_MAX_PACKET_SIZE/4];
+
+void reboot(void);
 
 void usb_setup(const struct usb_setup_request *setup)
 {
@@ -179,6 +182,8 @@ void usb_setup(const struct usb_setup_request *setup)
         // to be received.
         usb_ack(1);
         usb_wait_for_send_done();
+
+        msleep(1);
         reboot();
         while (1)
            ;

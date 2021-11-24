@@ -30,10 +30,9 @@
 #include <generated/soc.h>
 #include <generated/csr.h>
 
-#ifndef CONFIG_RESCUE_IMAGE_OFFSET
-#  define CONFIG_RESCUE_IMAGE_OFFSET 0x40000
+#ifndef CONFIG_MAIN_IMAGE_OFFSET
+#  define CONFIG_MAIN_IMAGE_OFFSET 0x40000
 #endif
-#define RAM_BOOT_SENTINAL 0x17ab0f23
 
 #define ERASE_SIZE 4096 // Erase block size (in bytes)
 #define WRITE_SIZE 256 // Number of bytes we can write
@@ -73,7 +72,7 @@ static uint32_t dfu_target_address;
 uint32_t dfu_origin_addr(void) {
     if (ram_mode)
         return ram_mode;
-    return CONFIG_RESCUE_IMAGE_OFFSET + SPIFLASH_BASE;
+    return CONFIG_MAIN_IMAGE_OFFSET + SPIFLASH_BASE;
 }
 
 static void set_state(dfu_state_t new_state, dfu_status_t new_status) {
@@ -149,7 +148,7 @@ static uint32_t address_for_block(unsigned blockNum)
     if (ram_mode)
         starting_offset = ram_mode;
     else
-        starting_offset = CONFIG_RESCUE_IMAGE_OFFSET;
+        starting_offset = CONFIG_MAIN_IMAGE_OFFSET;
 
     return starting_offset + (blockNum * DFU_TRANSFER_SIZE);
 }
@@ -177,20 +176,6 @@ bool dfu_download(unsigned blockNum, unsigned blockLength,
 
     // Store more data...
     memcpy(((uint8_t *)dfu_buffer) + packetOffset, data, packetLength);
-
-    // Check to see if we're writing to RAM instead of SPI flash
-    if ((blockNum == 0) && (packetOffset == 0) && (packetLength > 0)) {
-        unsigned int i = 0;
-        unsigned int max_check = packetLength;
-        if (max_check > sizeof(dfu_buffer))
-            max_check = sizeof(dfu_buffer);
-        for (i = 0; i < (max_check/4)-1; i++) {
-            if (dfu_buffer[i/4] == RAM_BOOT_SENTINAL) {
-                ram_mode = dfu_buffer[(i/4)+1];
-                break;
-            }
-        }
-    }
 
     if (packetOffset + packetLength != blockLength) {
         // Still waiting for more data.

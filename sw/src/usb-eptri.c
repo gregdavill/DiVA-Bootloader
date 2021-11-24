@@ -324,9 +324,6 @@ void usb_poll(void) {
         setup_length = 0;
         usb_setup((const struct usb_setup_request *)setup_packet);
     }
-
-    // process_tx();
-    // process_rx();
 }
 
 #else
