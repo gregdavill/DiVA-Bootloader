@@ -230,7 +230,8 @@ class BaseSoC(SoCCore, AutoDoc):
         self.submodules.reboot = ECPReboot(self)
         self.submodules.rgb = RGB(platform.request("rgb_led"))
 
-        git_version_subprocess = subprocess.Popen("git describe --tags", shell=True, stdout=subprocess.PIPE)
+        #Add GIT repo to the firmware
+        git_version_subprocess = subprocess.Popen("git describe --tags --first-parent --always", shell=True, stdout=subprocess.PIPE)
         git_version = git_version_subprocess.stdout.read().decode("utf-8").strip()
 
         config = [
