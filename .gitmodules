@@ -25,3 +25,6 @@
 [submodule "hw/deps/pythondata-software-compiler_rt"]
 	path = hw/deps/pythondata-software-compiler_rt
 	url = https://github.com/litex-hub/pythondata-software-compiler_rt
+[submodule "hw/deps/pythondata-software-picolibc"]
+	path = hw/deps/pythondata-software-picolibc
+	url = https://github.com/litex-hub/pythondata-software-picolibc

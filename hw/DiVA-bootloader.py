@@ -24,6 +24,11 @@ from litex.soc.cores.cpu import CPUNone
 from litex.soc.integration.builder import Builder
 from litex.soc.interconnect import wishbone
 
+
+from litex.soc.integration.soc_core import *
+from litex.soc.integration.soc import SoCRegion
+from litex.soc.integration.builder import *
+
 from litex.soc.interconnect.wishbone import SRAM
 
 from litex.soc.cores.clock import ECP5PLL
@@ -106,8 +111,8 @@ class _CRG(Module):
         self.submodules.pll = pll = ECP5PLL()
         pll.register_clkin(clk48_raw, 48e6)
 
-        pll.create_clkout(self.cd_usb_48, 48e6, 0)
-        pll.create_clkout(self.cd_usb_12, 12e6, 0)
+        pll.create_clkout(self.cd_usb_48, 48e6, 0, with_reset=False)
+        pll.create_clkout(self.cd_usb_12, 12e6, 0, with_reset=False)
 
         self.comb += self.cd_sys.clk.eq(self.cd_usb_12.clk)
         
@@ -189,9 +194,6 @@ class BaseSoC(SoCCore, AutoDoc):
                  use_dsp=False, placer="heap", output_dir="build",
                  pnr_seed=0,
                  **kwargs):
-        # Disable integrated RAM as we'll add it later
-        self.integrated_sram_size = 0
-
         self.output_dir = output_dir
         
         clk_freq = int(12e6)
@@ -241,6 +243,32 @@ class BaseSoC(SoCCore, AutoDoc):
         for (name,value) in config:
             self.add_constant("CONFIG_" + name, value)
 
+
+
+    def PackageFirmware(self, builder):  
+        self.finalize()
+
+        os.makedirs(builder.output_dir, exist_ok=True)
+
+        builder.software_packages = [
+            ("custom_bios", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sw")))
+        ]
+
+        builder._prepare_rom_software()
+        builder._generate_includes()
+        builder._generate_rom_software(compile_bios=False)
+
+        firmware_file = os.path.join(builder.software_dir, "custom_bios","bios.bin")
+        firmware_data = get_mem_data(firmware_file, self.cpu.endianness)
+        self.initialize_rom(firmware_data)
+
+        # lock out compiling firmware during build steps
+        builder.compile_software = False
+
+        self.finalize()
+
+
+
 def main():
     platform = Platform()
 
@@ -249,11 +277,15 @@ def main():
 
     soc = BaseSoC(platform)
     builder = Builder(soc)
-    builder.software_packages = [
-        ("bios", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sw")))
-    ]
+    # builder.software_packages = [
+    #     ("custom_bios", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sw")))
+    # ]
+
+    soc.PackageFirmware(builder)
+
     vns = builder.build()
-    
+    #vns = soc.build(build_dir=builder.gateware_dir)
+        
     soc.do_exit(vns)
 
     # create a bitstream for loading into FLASH

@@ -1,7 +1,5 @@
 .global main
 .global isr
-
-.section .text.start
 .global _start
 
 _start:
@@ -14,7 +12,6 @@ _start:
   nop
   nop
 
-.section .text
 .global  trap_entry
 trap_entry:
   sw x1,  - 1*4(sp)
@@ -57,9 +54,22 @@ trap_entry:
 
 
 crt_init:
-  la sp, _fstack + 4
+  la sp, _fstack
   la a0, trap_entry
   csrw mtvec, a0
+
+data_init:
+  la a0, _fdata
+  la a1, _edata
+  la a2, _fdata_rom
+data_loop:
+  beq a0,a1,data_done
+  lw a3,0(a2)
+  sw a3,0(a0)
+  add a0,a0,4
+  add a2,a2,4
+  j data_loop
+data_done:
 
 bss_init:
   la a0, _fbss
@@ -70,18 +80,6 @@ bss_loop:
   add a0,a0,4
   j bss_loop
 bss_done:
-
-  /* Load DATA */
-  la t0, _erodata
-  la t1, _fdata
-  la t2, _edata
-3:
-  lw t3, 0(t0)
-  sw t3, 0(t1)
-  /* _edata is aligned to 16 bytes. Use word-xfers. */
-  addi t0, t0, 4
-  addi t1, t1, 4
-  bltu t1, t2, 3b
 
   li a0, 0x880  //880 enable timer + external interrupt sources (until mstatus.MIE is set, they will never trigger an interrupt)
   csrw mie,a0
