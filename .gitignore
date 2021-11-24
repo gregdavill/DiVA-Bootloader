@@ -1,0 +1,13 @@
+.obj/
+*.swp
+*.swo
+*~
+*.bin
+*.dfu
+*.ihex
+*.elf
+.vscode/
+build/
+__pycache__/
+.env
+booster/make-booster
