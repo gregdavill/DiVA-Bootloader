@@ -1,9 +1,4 @@
-# Earlier versions of the Raspberry Pi image only had riscv32-gcc
-ifneq (,$(wildcard /usr/bin/riscv32-unknown-elf-gcc))
-TRGT       ?= riscv32-unknown-elf-
-else
-TRGT       ?= riscv64-unknown-elf-
-endif
+TRGT       ?= riscv-none-embed-
 
 CC         := $(TRGT)gcc
 CXX        := $(TRGT)g++
@@ -20,7 +15,7 @@ PATH_SEP   := \\
 endif
 
 ifeq ($(LITEX),1)
-BASE_DIR   := ../../../../sw
+BASE_DIR   := ../../../../../sw
 LDSCRIPT   := $(BASE_DIR)/ld/linker.ld
 LD_DIR     := ../include/generated
 ADD_CFLAGS := -I../include -I$(BASE_DIR)/include
