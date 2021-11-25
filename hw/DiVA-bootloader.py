@@ -4,64 +4,40 @@
 # the build will finish without exiting due to missing third-party
 # programs.
 LX_DEPENDENCIES = ["riscv", "icestorm", "yosys", "nextpnr-ice40"]
-
-# Import lxbuildenv to integrate the deps/ directory
 import lxbuildenv
 
-# Disable pylint's E1101, which breaks completely on migen
-#pylint:disable=E1101
-
-#from migen import *
-from migen import Module, Signal, Instance, ClockDomain, If
-from migen.fhdl.specials import TSTriple
-from migen.fhdl.decorators import ClockDomainsRenamer
-
-from litex.build.lattice.platform import LatticePlatform
-from litex.build.generic_platform import Pins, Subsignal
-from litex.soc.integration.doc import AutoDoc, ModuleDoc
-from litex.soc.integration.soc_core import SoCCore
-from litex.soc.cores.cpu import CPUNone
-from litex.soc.integration.builder import Builder
-from litex.soc.interconnect import wishbone
-
-
-from litex.soc.integration.soc_core import *
-from litex.soc.integration.soc import SoCRegion
-from litex.soc.integration.builder import *
-
-from litex.soc.interconnect.wishbone import SRAM
-
-from litex.soc.cores.clock import ECP5PLL
-from migen.genlib.resetsync import AsyncResetSynchronizer
-
-from litex.soc.cores import spi_flash
-
-from valentyusb.usbcore import io as usbio
-from valentyusb.usbcore.cpu import epmem, unififo, epfifo, dummyusb, eptri
-from valentyusb.usbcore.endpoint import EndpointType
-
-
-from rtl.button import Button
-from rtl.pwmled import RGB
-from rtl.ecpreboot import ECPReboot
-
-import argparse
-import os
 import subprocess
-
+import os
+import argparse
 
 from litex.build.generic_platform import *
+from rtl.ecpreboot import ECPReboot
+from rtl.pwmled import RGB
+from rtl.button import Button
+from valentyusb.usbcore.cpu import eptri
+from valentyusb.usbcore import io as usbio
+from litex.soc.cores import spi_flash
+from migen.genlib.resetsync import AsyncResetSynchronizer
+from litex.soc.cores.clock import ECP5PLL
+from litex.soc.integration.builder import *
+from litex.soc.integration.soc_core import *
+from litex.soc.integration.builder import Builder
+from litex.soc.integration.soc_core import SoCCore
+from litex.soc.integration.doc import AutoDoc
+from litex.build.generic_platform import Pins, Subsignal
+from litex.build.lattice.platform import LatticePlatform
+from migen import Module, Signal, ClockDomain, If
 
 _io = [
     ("clk48", 0,  Pins("M1"),  IOStandard("LVCMOS18")),
     ("rst_n", 0, Pins("V17"), IOStandard("LVCMOS33")),
-    ("usr_btn", 0, Pins("F2"),IOStandard("LVCMOS18"), Misc("PULLMODE=UP")),
+    ("usr_btn", 0, Pins("F2"), IOStandard("LVCMOS18"), Misc("PULLMODE=UP")),
 
     ("rgb_led", 0,
         Subsignal("r", Pins("J17"), IOStandard("LVCMOS33")),
         Subsignal("g", Pins("J16"), IOStandard("LVCMOS33")),
         Subsignal("b", Pins("L16"), IOStandard("LVCMOS33")),
-    ),
+     ),
 
     ("usb", 0,
         Subsignal("d_p", Pins("G16")),
@@ -69,12 +45,12 @@ _io = [
         Subsignal("pullup", Pins("H16")),
         Subsignal("sw_sel", Pins("F15")),
         IOStandard("LVCMOS33")
-    ),
+     ),
 
     ("spiflash4x", 0,
         Subsignal("cs_n", Pins("U17"), IOStandard("LVCMOS33")),
         Subsignal("dq",   Pins("U18 T18 R18 N18"), IOStandard("LVCMOS33")),
-    ),
+     ),
 ]
 
 
@@ -115,11 +91,11 @@ class _CRG(Module):
         pll.create_clkout(self.cd_usb_12, 12e6, 0, with_reset=False)
 
         self.comb += self.cd_sys.clk.eq(self.cd_usb_12.clk)
-        
+
         self.sync.por += \
             If(reset_delay != 0,
                 reset_delay.eq(reset_delay - 1)
-            )
+               )
         self.specials += AsyncResetSynchronizer(self.cd_por, self.reset)
 
 
@@ -127,8 +103,9 @@ class Platform(LatticePlatform):
     def __init__(self, device="25F", toolchain="trellis"):
         self.device = device
         self.hw_platform = "DiVA"
-        
-        LatticePlatform.__init__(self, "LFE5U-" + device + "-8MG285C", _io, [], toolchain=toolchain)
+
+        LatticePlatform.__init__(
+            self, "LFE5U-" + device + "-8MG285C", _io, [], toolchain=toolchain)
 
         self.name = 'diva_bootloader'
 
@@ -139,46 +116,15 @@ class Platform(LatticePlatform):
 
 
 class BaseSoC(SoCCore, AutoDoc):
-    """Fomu Bootloader and Base SoC
-
-    Fomu is an FPGA that fits in your USB port.  This reference manual
-    documents the basic SoC that runs the bootloader, and that can be
-    reused to run your own RISC-V programs.
-
-    This reference manual only describes a particular version of the SoC.
-    The register sets described here are guaranteed to be available
-    with a given ``major version``, but are not guaranteed to be available on
-    any other version.  Naturally, you are free to create your own SoC
-    that does not provide these hardware blocks. To see what the version of the
-    bitstream you're running, check the ``VERSION`` registers.
-    """
 
     csr_map = {
-        "ctrl":           0,  # provided by default (optional)
-        "crg":            1,  # user
-        "uart_phy":       2,  # provided by default (optional)
-        "uart":           3,  # provided by default (optional)
-        "identifier_mem": 4,  # provided by default (optional)
-        "timer0":         5,  # provided by default (optional)
-        "cpu_or_bridge":  8,
-        "usb":            9,
-        "picorvspi":      10,
-        "touch":          11,
-        "reboot":         12,
-        "rgb":            13,
-        "version":        14,
-        "lxspi":          15,
-        "messible":       16,
-        "button":         17,
     }
 
     SoCCore.mem_map = {
         "rom":              0x00000000,  # (default shadow @0x80000000)
         "sram":             0x10000000,  # (default shadow @0xa0000000)
         "spiflash":         0x20000000,  # (default shadow @0xa0000000)
-        "main_ram":         0x40000000,  # (default shadow @0xc0000000)
         "csr":              0xe0000000,  # (default shadow @0xe0000000)
-        "vexriscv_debug":   0xf00f0000,
     }
 
     interrupt_map = {
@@ -187,37 +133,36 @@ class BaseSoC(SoCCore, AutoDoc):
     }
     interrupt_map.update(SoCCore.interrupt_map)
 
-    
-    
-    def __init__(self, platform, boot_source="rand",
-                 debug=None, bios_file=None,
-                 use_dsp=False, placer="heap", output_dir="build",
-                 pnr_seed=0,
+    def __init__(self, platform, output_dir="build",
                  **kwargs):
         self.output_dir = output_dir
-        
+
         clk_freq = int(12e6)
 
-        SoCCore.__init__(self, platform, clk_freq, cpu_variant='minimal', integrated_sram_size=8*1024, integrated_rom_size=8*1024, with_uart=False, csr_data_width=32, **kwargs)
+        SoCCore.__init__(self, platform, clk_freq, cpu_variant='minimal', integrated_sram_size=8 *
+                         1024, integrated_rom_size=8*1024, with_uart=False, csr_data_width=32, **kwargs)
         self.platform = platform
 
         self.submodules.crg = _CRG(platform)
         self.add_config("ECP5")
         self.add_config("QSPI_ENABLE")
-        
+
         # The litex SPI module supports memory-mapped reads, as well as a bit-banged mode
         # for doing writes.
         spi_pads = platform.request("spiflash4x")
-        self.submodules.lxspi = spi_flash.SpiFlashDualQuad(spi_pads, dummy=platform.spi_dummy, endianness="little")
+        self.submodules.lxspi = spi_flash.SpiFlashDualQuad(
+            spi_pads, dummy=platform.spi_dummy, endianness="little")
         self.lxspi.add_clk_primitive(platform.device)
-        self.register_mem("spiflash", self.mem_map["spiflash"], self.lxspi.bus, size=platform.spi_size)
+        self.register_mem(
+            "spiflash", self.mem_map["spiflash"], self.lxspi.bus, size=platform.spi_size)
 
         # Add USB pads, as well as the appropriate USB controller.  If no CPU is
         # present, use the DummyUsb controller.
         usb_pads = platform.request("usb")
         usb_iobuf = usbio.IoBuf(usb_pads.d_p, usb_pads.d_n, usb_pads.pullup)
-        self.submodules.usb = eptri.TriEndpointInterface(usb_iobuf, debug=False)
-        
+        self.submodules.usb = eptri.TriEndpointInterface(
+            usb_iobuf, debug=False)
+
         if hasattr(usb_pads, "sw_sel"):
             self.comb += usb_pads.sw_sel.eq(1)
 
@@ -230,8 +175,9 @@ class BaseSoC(SoCCore, AutoDoc):
         self.submodules.reboot = ECPReboot(self)
         self.submodules.rgb = RGB(platform.request("rgb_led"))
 
-        #Add GIT repo to the firmware
-        git_version_subprocess = subprocess.Popen("git describe --tags --first-parent --always", shell=True, stdout=subprocess.PIPE)
+        # Add GIT repo to the firmware
+        git_version_subprocess = subprocess.Popen(
+            "git describe --tags --first-parent --always", shell=True, stdout=subprocess.PIPE)
         git_version = git_version_subprocess.stdout.read().decode("utf-8").strip()
 
         config = [
@@ -241,25 +187,25 @@ class BaseSoC(SoCCore, AutoDoc):
             ("USB_MANUFACTURER_NAME", "Get Labs"),
             ("USB_PRODUCT_NAME", "Boson DiVA r0.3 - DFU Bootloader {}".format(git_version))
         ]
-        for (name,value) in config:
+        for (name, value) in config:
             self.add_constant("CONFIG_" + name, value)
 
-
-
-    def PackageFirmware(self, builder):  
+    def PackageFirmware(self, builder):
         self.finalize()
 
         os.makedirs(builder.output_dir, exist_ok=True)
 
         builder.software_packages = [
-            ("custom_bios", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sw")))
+            ("custom_bios", os.path.abspath(os.path.join(
+                os.path.dirname(__file__), "..", "sw")))
         ]
 
         builder._prepare_rom_software()
         builder._generate_includes()
         builder._generate_rom_software(compile_bios=False)
 
-        firmware_file = os.path.join(builder.software_dir, "custom_bios","bios.bin")
+        firmware_file = os.path.join(
+            builder.software_dir, "custom_bios", "bios.bin")
         firmware_data = get_mem_data(firmware_file, self.cpu.endianness)
         self.initialize_rom(firmware_data)
 
@@ -269,37 +215,30 @@ class BaseSoC(SoCCore, AutoDoc):
         self.finalize()
 
 
-
 def main():
     platform = Platform()
 
-    output_dir = 'build'
-    os.environ["LITEX"] = "1" # Give our Makefile something to look for
-
+    os.environ["LITEX"] = "1"  # Give our Makefile something to look for
+    
     soc = BaseSoC(platform)
     builder = Builder(soc)
-    # builder.software_packages = [
-    #     ("custom_bios", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sw")))
-    # ]
-
     soc.PackageFirmware(builder)
 
     vns = builder.build()
-    #vns = soc.build(build_dir=builder.gateware_dir)
-        
+
     soc.do_exit(vns)
 
     # create a bitstream for loading into FLASH
-    #input_config = os.path.join(output_dir, "gateware", "top.config")
-    output_bitstream = os.path.join(builder.gateware_dir, f"{platform.name}.bit")
-    input_config = os.path.join(builder.gateware_dir, f"{platform.name}.config")
-        
+    output_bitstream = os.path.join(
+        builder.gateware_dir, f"{platform.name}.bit")
+    input_config = os.path.join(
+        builder.gateware_dir, f"{platform.name}.config")
 
-    os.system(f"ecppack --freq 38.8 --compress --bootaddr 0x40000 --input {input_config} --bit {output_bitstream}")
-
+    os.system(
+        f"ecppack --freq 38.8 --compress --bootaddr 0x40000 --input {input_config} --bit {output_bitstream}")
 
     print(
-    f"""Foboot build complete.
+        f"""Foboot build complete.
         File size: 0x{os.path.getsize(output_bitstream) :08X}
     """)
 
